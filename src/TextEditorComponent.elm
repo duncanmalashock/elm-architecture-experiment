@@ -77,18 +77,6 @@ update config msg =
                 (Just Errored)
 
 
-updateAcceptedAt : Config msg -> Posix -> Config msg
-updateAcceptedAt config acceptedAt =
-    let
-        model =
-            config.model
-
-        updatedModel =
-            { model | acceptedAt = Just acceptedAt }
-    in
-    { config | model = updatedModel }
-
-
 view : Config msg -> Html msg
 view ({ model } as config) =
     div []
