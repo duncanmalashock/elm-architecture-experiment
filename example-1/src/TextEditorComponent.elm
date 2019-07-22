@@ -1,16 +1,10 @@
-module TextEditorComponent exposing (Config, ExternalMessage(..), Model, Msg, init, update, view)
+module TextEditorComponent exposing (ExternalMessage(..), Model, Msg, init, update, view)
 
 import Html exposing (Html, button, div, input, text)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Time exposing (Posix)
-
-
-type alias Config msg =
-    { toMsg : Model -> Maybe ExternalMessage -> msg
-    , model : Model
-    }
-
+import Task
 
 type alias Model =
     { value : String
@@ -19,14 +13,11 @@ type alias Model =
     }
 
 
-init : (Model -> Maybe ExternalMessage -> msg) -> String -> Config msg
-init toMsg value =
-    { toMsg = toMsg
-    , model =
-        { value = value
-        , revertValue = value
-        , acceptedAt = Nothing
-        }
+init : String -> Model
+init value =
+    { value = value
+    , revertValue = value
+    , acceptedAt = Nothing
     }
 
 
@@ -39,46 +30,48 @@ type Msg
 
 
 type ExternalMessage
-    = ValueAccepted String (Posix -> Msg)
+    = ValueAccepted String
     | ValueReverted String
     | Errored
 
 
-update : Config msg -> Msg -> msg
-update config msg =
-    let
-        model =
-            config.model
-    in
+update : Model -> Msg -> ( Model, Cmd Msg, Maybe ExternalMessage )
+update model msg =
     case msg of
         UpdateValue string ->
-            config.toMsg
-                { model | value = string }
-                Nothing
+            ( { model | value = string }
+            , Cmd.none
+            , Nothing
+            )
 
         UpdateAcceptedAt posix ->
-            config.toMsg
-                { model | acceptedAt = Just posix }
-                Nothing
+            ( { model | acceptedAt = Just posix }
+            , Cmd.none
+            , Nothing
+            )
 
         Revert ->
-            config.toMsg
-                { model | value = model.revertValue }
-                (Just <| ValueReverted model.revertValue)
+            ( { model | value = model.revertValue }
+            , Cmd.none
+            , Just <| ValueReverted model.revertValue
+            )
 
         Accept ->
-            config.toMsg
-                { model | revertValue = model.value }
-                (Just (ValueAccepted model.value UpdateAcceptedAt))
+            ( { model | revertValue = model.value }
+            , Time.now
+                |> Task.perform UpdateAcceptedAt
+            , Just <| ValueAccepted model.value
+            )
 
         Error ->
-            config.toMsg
-                model
-                (Just Errored)
+            ( model
+            , Cmd.none
+            , Just Errored
+            )
 
 
-view : Config msg -> Html msg
-view ({ model } as config) =
+view : Model -> Html Msg
+view model =
     div []
         [ input [ onInput UpdateValue, value model.value ] []
         , button
@@ -94,4 +87,3 @@ view ({ model } as config) =
         , button [ onClick Error ]
             [ text "(Error Test)" ]
         ]
-        |> Html.map (update config)

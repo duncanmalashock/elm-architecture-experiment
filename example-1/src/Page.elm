@@ -1,35 +1,25 @@
-module Page exposing (Config, ExternalMessage(..), Model, Msg, init, update, view)
+module Page exposing (ExternalMessage(..), Model, Msg, init, update, view)
 
 import Html exposing (Html, div)
 import TextEditorComponent exposing (ExternalMessage(..))
-import Time exposing (Posix)
 
 
 type ExternalMessage
-    = NeedCurrentTimeForTextEditor (Posix -> Msg)
-
-
-type alias Config msg =
-    { toMsg : Model -> Maybe ExternalMessage -> msg
-    , model : Model
-    }
+    = NoOp
 
 
 type alias Model =
-    { textEditorA : TextEditorComponent.Config Msg
-    , textEditorB : TextEditorComponent.Config Msg
+    { textEditorA : TextEditorComponent.Model
+    , textEditorB : TextEditorComponent.Model
     , status : String
     }
 
 
-init : (Model -> Maybe ExternalMessage -> msg) -> Config msg
-init toMsg =
-    { toMsg = toMsg
-    , model =
-        { textEditorA = TextEditorComponent.init (UpdatedTextEditorComponent A) "A"
-        , textEditorB = TextEditorComponent.init (UpdatedTextEditorComponent B) "B"
-        , status = ""
-        }
+init : Model
+init =
+    { textEditorA = TextEditorComponent.init "A"
+    , textEditorB = TextEditorComponent.init "B"
+    , status = ""
     }
 
 
@@ -39,117 +29,109 @@ type Index
 
 
 type Msg
-    = UpdatedTextEditorComponent Index TextEditorComponent.Model (Maybe TextEditorComponent.ExternalMessage)
-    | ReceivedCurrentTimeForTextEditor Index (Posix -> TextEditorComponent.Msg) Posix
+    = TextEditorComponentMsg Index TextEditorComponent.Msg
 
 
-update : Config msg -> Msg -> msg
-update config msg =
-    let
-        model =
-            config.model
-    in
+update : Model -> Msg -> ( Model, Cmd Msg, Maybe ExternalMessage )
+update model msg =
     case msg of
-        ReceivedCurrentTimeForTextEditor index resolveMsg currentTime ->
-            case index of
-                A ->
-                    TextEditorComponent.update model.textEditorA (resolveMsg currentTime)
-                        |> update config
-
-                B ->
-                    TextEditorComponent.update model.textEditorB (resolveMsg currentTime)
-                        |> update config
-
-        UpdatedTextEditorComponent index newModel msgFromEditor ->
+        TextEditorComponentMsg index textEditorMsg ->
             case index of
                 A ->
                     let
-                        textEditorA =
-                            model.textEditorA
+                        ( updatedEditorA, editorCmd, msgFromEditor ) =
+                            TextEditorComponent.update
+                                model.textEditorA
+                                textEditorMsg
 
-                        updatedEditorA =
-                            { textEditorA | model = newModel }
-
-                        ( updatedStatus, externalMsg ) =
+                        ( updatedStatus, cmd, externalMsg ) =
                             case msgFromEditor of
-                                Just (ValueAccepted acceptedValue resolveMsg) ->
-                                    ( "Editor A value accepted: " ++ acceptedValue
-                                    , Just
-                                        (NeedCurrentTimeForTextEditor
-                                            (ReceivedCurrentTimeForTextEditor A resolveMsg)
-                                        )
+                                Just (ValueAccepted acceptedValue) ->
+                                    ( "Editor A value accepted: "
+                                        ++ acceptedValue
+                                    , Cmd.map (TextEditorComponentMsg A) editorCmd
+                                    , Nothing
                                     )
 
                                 Just (ValueReverted revertedValue) ->
-                                    ( "Editor A value reverted: " ++ revertedValue
+                                    ( "Editor A value reverted: "
+                                        ++ revertedValue
+                                    , Cmd.none
                                     , Nothing
                                     )
 
                                 Just Errored ->
                                     ( "Error triggered in Editor A"
+                                    , Cmd.none
                                     , Nothing
                                     )
 
                                 Nothing ->
                                     ( model.status
+                                    , Cmd.none
                                     , Nothing
                                     )
                     in
-                    config.toMsg
-                        { model
-                            | textEditorA = updatedEditorA
-                            , status = updatedStatus
-                        }
-                        externalMsg
+                    ( { model
+                        | textEditorA = updatedEditorA
+                        , status = updatedStatus
+                      }
+                    , cmd
+                    , externalMsg
+                    )
 
                 B ->
                     let
-                        textEditorB =
-                            model.textEditorB
+                        ( updatedEditorB, editorCmd, msgFromEditor ) =
+                            TextEditorComponent.update
+                                model.textEditorB
+                                textEditorMsg
 
-                        updatedEditorB =
-                            { textEditorB | model = newModel }
-
-                        ( updatedStatus, externalMsg ) =
+                        ( updatedStatus, cmd, externalMsg ) =
                             case msgFromEditor of
-                                Just (ValueAccepted acceptedValue resolveMsg) ->
-                                    ( "Editor B value accepted: " ++ acceptedValue
-                                    , Just
-                                        (NeedCurrentTimeForTextEditor
-                                            (ReceivedCurrentTimeForTextEditor B resolveMsg)
-                                        )
+                                Just (ValueAccepted acceptedValue) ->
+                                    ( "Editor B value accepted: "
+                                        ++ acceptedValue
+                                    , Cmd.map (TextEditorComponentMsg B) editorCmd
+                                    , Nothing
                                     )
 
                                 Just (ValueReverted revertedValue) ->
-                                    ( "Editor B value reverted: " ++ revertedValue
+                                    ( "Editor B value reverted: "
+                                        ++ revertedValue
+                                    , Cmd.none
                                     , Nothing
                                     )
 
                                 Just Errored ->
                                     ( "Error triggered in Editor B"
+                                    , Cmd.none
                                     , Nothing
                                     )
 
                                 Nothing ->
                                     ( model.status
+                                    , Cmd.none
                                     , Nothing
                                     )
                     in
-                    config.toMsg
-                        { model
-                            | textEditorB = updatedEditorB
-                            , status = updatedStatus
-                        }
-                        externalMsg
+                    ( { model
+                        | textEditorB = updatedEditorB
+                        , status = updatedStatus
+                      }
+                    , cmd
+                    , externalMsg
+                    )
 
 
-view : Config msg -> Html msg
-view ({ model } as config) =
+view : Model -> Html Msg
+view model =
     div []
         [ TextEditorComponent.view model.textEditorA
+            |> Html.map (TextEditorComponentMsg A)
         , Html.br [] []
         , TextEditorComponent.view model.textEditorB
+            |> Html.map (TextEditorComponentMsg B)
         , Html.br [] []
         , Html.text model.status
         ]
-        |> Html.map (update config)

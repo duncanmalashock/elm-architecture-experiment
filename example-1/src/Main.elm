@@ -1,18 +1,17 @@
-module Main exposing (main)
+module Main exposing (Msg, main)
 
 import Browser
+import Html
 import Page exposing (ExternalMessage(..))
-import Task
-import Time
 
 
 type alias Model =
-    { page : Page.Config Msg
+    { page : Page.Model
     }
 
 
 type Msg
-    = UpdatedPage Page.Model (Maybe Page.ExternalMessage)
+    = PageMsg Page.Msg
 
 
 main : Program () Model Msg
@@ -27,7 +26,7 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { page = Page.init UpdatedPage
+    ( { page = Page.init
       }
     , Cmd.none
     )
@@ -38,6 +37,7 @@ view model =
     { title = "Sample app"
     , body =
         [ Page.view model.page
+            |> Html.map PageMsg
         ]
     }
 
@@ -45,24 +45,12 @@ view model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        UpdatedPage newPageModel msgFromPage ->
+        PageMsg pageMsg ->
             let
-                pageConfig =
-                    model.page
+                ( updatedPage, cmd, msgFromPage ) =
+                    Page.update model.page pageMsg
 
-                updatedPageConfig =
-                    { pageConfig | model = newPageModel }
-
-                getCurrentTimeCmd =
-                    case msgFromPage of
-                        Just (NeedCurrentTimeForTextEditor resolveMsg) ->
-                            Time.now
-                                |> Task.perform
-                                    (resolveMsg >> Page.update updatedPageConfig)
-
-                        Nothing ->
-                            Cmd.none
             in
-            ( { model | page = updatedPageConfig }
-            , getCurrentTimeCmd
+            ( { model | page = updatedPage }
+            , Cmd.map PageMsg cmd
             )
